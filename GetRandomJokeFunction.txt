@@ -1,0 +1,48 @@
+import json
+import boto3
+import os
+import requests
+from datetime import datetime
+import uuid
+
+# Initialize DynamoDB client
+dynamodb = boto3.resource('dynamodb')
+table_name = os.environ['DYNAMODB_TABLE']
+table = dynamodb.Table(table_name)
+
+
+def get_random_joke():
+    url = "https://official-joke-api.appspot.com/jokes/random"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"Error fetching joke: {response.status_code}, {response.text}")
+
+
+def lambda_handler(event, context):
+    try:
+        # Get a random joke from the API
+        joke = get_random_joke()
+
+        # Create item to be inserted into DynamoDB
+        item = {
+            'JokeID': str(uuid.uuid4()),  # unique ID
+            'Setup': joke.get('setup'),
+            'Punchline': joke.get('punchline'),
+            'Timestamp': datetime.utcnow().isoformat()
+        }
+
+        # Insert item into DynamoDB table
+        table.put_item(Item=item)
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Joke stored successfully', 'joke': joke})
+        }
+
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
+        }
